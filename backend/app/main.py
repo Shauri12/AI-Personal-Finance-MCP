@@ -18,10 +18,10 @@ async def lifespan(app: FastAPI):
     async with async_session() as session:
         await seed_demo_data(session)
         await session.commit()
-    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} started!")
+    print(f"START: {settings.APP_NAME} v{settings.APP_VERSION} started!")
     yield
     # Shutdown
-    print("👋 Shutting down...")
+    print("STOP: Shutting down...")
 
 
 app = FastAPI(

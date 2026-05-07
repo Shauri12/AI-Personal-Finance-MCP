@@ -145,4 +145,4 @@ async def seed_demo_data(db: AsyncSession):
         ))
 
     await db.flush()
-    print(f"✅ Seeded {len(transactions)} transactions, {len(INVESTMENTS_DATA)} investments, {len(GOALS_DATA)} goals for demo user.")
+    print(f"DONE: Seeded {len(transactions)} transactions, {len(INVESTMENTS_DATA)} investments, {len(GOALS_DATA)} goals for demo user.")

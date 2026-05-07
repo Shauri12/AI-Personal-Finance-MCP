@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
-  ReceiptIndianRupee, 
+  IndianRupee, 
   TrendingUp, 
   Target, 
   MessageSquare, 
@@ -17,7 +17,7 @@ const Sidebar = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Transactions', path: '/transactions', icon: ReceiptIndianRupee },
+    { name: 'Transactions', path: '/transactions', icon: IndianRupee },
     { name: 'Investments', path: '/investments', icon: TrendingUp },
     { name: 'Goals', path: '/goals', icon: Target },
     { name: 'AI Chat', path: '/chat', icon: MessageSquare },

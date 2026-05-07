@@ -1,0 +1,27 @@
+# Prerequisites
+*.pyc
+__pycache__/
+.env
+venv/
+.venv/
+env/
+dist/
+build/
+node_modules/
+
+# IDEs
+.vscode/
+.idea/
+
+# Database
+*.db
+*.sqlite3
+chroma_db/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project Specific
+frontend/dist
+backend/venv
