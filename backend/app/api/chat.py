@@ -1,132 +1,32 @@
-"""AI Chat API routes - RAG-based financial assistant."""
+"""AI Chat API routes - RAG-based financial assistant with streaming support.
+
+This is the main chat interface that ties together:
+- MCP Context Engine (financial data summarization)
+- Intent Detection (understanding user queries)
+- RAG Retrieval (vector similarity search)
+- LLM Integration (OpenAI/Gemini/fallback)
+- Conversation Memory (session persistence)
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
 from typing import List
 from datetime import datetime, timedelta, timezone
 import uuid
+import json
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.financial import Transaction, Investment, Goal, ChatMessage
 from app.schemas.schemas import ChatRequest, ChatResponse, ChatMessageResponse
+from app.ai.rag.retriever import RAGEngine
+from app.ai.llm_client import generate_response, generate_response_stream, get_provider
+from app.ai.memory import ConversationMemory
+from app.ai.intent_detector import detect_intent
 
 router = APIRouter(prefix="/api/chat", tags=["AI Chat"])
-
-
-async def _build_financial_context(user: User, db: AsyncSession) -> str:
-    """Build MCP financial context for the AI assistant."""
-    now = datetime.now(timezone.utc)
-    ms = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    # Monthly summary
-    inc_r = await db.execute(select(func.coalesce(func.sum(Transaction.amount), 0)).where(
-        and_(Transaction.user_id == user.id, Transaction.transaction_type == "income", Transaction.timestamp >= ms)))
-    income = float(inc_r.scalar())
-    exp_r = await db.execute(select(func.coalesce(func.sum(Transaction.amount), 0)).where(
-        and_(Transaction.user_id == user.id, Transaction.transaction_type == "expense", Transaction.timestamp >= ms)))
-    expenses = float(exp_r.scalar())
-
-    # Top categories
-    cat_r = await db.execute(select(Transaction.category, func.sum(Transaction.amount)).where(
-        and_(Transaction.user_id == user.id, Transaction.transaction_type == "expense", Transaction.timestamp >= ms)
-    ).group_by(Transaction.category).order_by(func.sum(Transaction.amount).desc()).limit(5))
-    top_cats = cat_r.all()
-
-    # Recent transactions
-    rec_r = await db.execute(select(Transaction).where(Transaction.user_id == user.id).order_by(desc(Transaction.timestamp)).limit(10))
-    recent = rec_r.scalars().all()
-
-    # Investments
-    inv_r = await db.execute(select(Investment).where(and_(Investment.user_id == user.id, Investment.is_active == True)))
-    investments = inv_r.scalars().all()
-
-    # Goals
-    goal_r = await db.execute(select(Goal).where(and_(Goal.user_id == user.id, Goal.is_completed == False)))
-    goals = goal_r.scalars().all()
-
-    # Subscriptions (recurring)
-    sub_r = await db.execute(select(Transaction.merchant, func.sum(Transaction.amount)).where(
-        and_(Transaction.user_id == user.id, Transaction.is_recurring == True)
-    ).group_by(Transaction.merchant))
-    subs = sub_r.all()
-
-    ctx = f"""=== FINANCIAL CONTEXT FOR {user.full_name} ===
-Monthly Income: ₹{income:,.0f} | Monthly Expenses: ₹{expenses:,.0f} | Savings: ₹{income - expenses:,.0f} ({((income - expenses) / max(income, 1) * 100):.0f}%)
-Currency: {user.currency}
-
-TOP SPENDING CATEGORIES:
-"""
-    for cat, amt in top_cats:
-        ctx += f"- {cat.title()}: ₹{amt:,.0f}\n"
-
-    ctx += "\nRECENT TRANSACTIONS:\n"
-    for t in recent[:7]:
-        ctx += f"- {t.timestamp.strftime('%d %b')}: ₹{t.amount:,.0f} ({t.category}) {t.merchant or ''} [{t.transaction_type}]\n"
-
-    if investments:
-        total_inv = sum(i.current_value for i in investments)
-        total_invested = sum(i.invested_amount for i in investments)
-        ctx += f"\nINVESTMENTS (Total: ₹{total_inv:,.0f}, Returns: ₹{total_inv - total_invested:,.0f}):\n"
-        for i in investments:
-            ctx += f"- {i.name} ({i.investment_type}): ₹{i.current_value:,.0f} (invested ₹{i.invested_amount:,.0f}, {i.returns_pct:.1f}%)\n"
-
-    if goals:
-        ctx += "\nFINANCIAL GOALS:\n"
-        for g in goals:
-            pct = g.current_amount / max(g.target_amount, 1) * 100
-            ctx += f"- {g.name}: ₹{g.current_amount:,.0f}/₹{g.target_amount:,.0f} ({pct:.0f}%) by {g.target_date.strftime('%b %Y')}\n"
-
-    if subs:
-        ctx += "\nRECURRING SUBSCRIPTIONS:\n"
-        for merchant, amt in subs:
-            ctx += f"- {merchant}: ₹{amt:,.0f}/month\n"
-
-    return ctx
-
-
-def _generate_ai_response(query: str, context: str, chat_history: list) -> str:
-    """Generate AI response using financial context (rule-based fallback when no API key)."""
-    q = query.lower()
-
-    if any(w in q for w in ["spend", "expense", "spending"]):
-        return f"Based on your financial data:\n\n{context.split('TOP SPENDING')[1].split('RECENT')[0] if 'TOP SPENDING' in context else 'No spending data available.'}\n\n💡 I can see your spending patterns. Would you like me to suggest areas where you could cut back?"
-
-    if any(w in q for w in ["save", "saving"]):
-        lines = context.split('\n')
-        summary = lines[1] if len(lines) > 1 else "No data"
-        return f"Here's your savings overview:\n\n{summary}\n\n💡 A good target is saving 20-30% of your income. Want me to create a savings plan?"
-
-    if any(w in q for w in ["invest", "portfolio", "mutual fund", "sip", "stock"]):
-        if "INVESTMENTS" in context:
-            inv_section = context.split("INVESTMENTS")[1].split("\n\n")[0]
-            return f"Your investment portfolio:\n\n{inv_section}\n\n💡 Diversification is key. Want me to analyze your portfolio risk?"
-        return "You don't have any investments tracked yet. Would you like to add your investment details?"
-
-    if any(w in q for w in ["goal", "target", "plan"]):
-        if "GOALS" in context:
-            goal_section = context.split("GOALS")[1].split("\n\n")[0]
-            return f"Your financial goals:\n\n{goal_section}\n\n💡 Want me to suggest a savings strategy to reach your goals faster?"
-        return "You haven't set any financial goals yet. Setting goals helps you stay on track. Want to create one?"
-
-    if any(w in q for w in ["subscription", "recurring", "netflix", "spotify"]):
-        if "SUBSCRIPTIONS" in context:
-            sub_section = context.split("SUBSCRIPTIONS")[1].split("\n\n")[0]
-            return f"Your active subscriptions:\n\n{sub_section}\n\n💡 Review unused subscriptions to save money!"
-        return "I haven't detected any recurring subscriptions. They'll appear as I track more of your transactions."
-
-    if any(w in q for w in ["afford", "can i buy", "purchase"]):
-        return f"Let me check your financial position:\n\n{context.split(chr(10))[1]}\n\n💡 Based on your current savings rate, I'd recommend ensuring you have 3-6 months of emergency funds before major purchases."
-
-    if any(w in q for w in ["health", "score", "how am i doing"]):
-        lines = context.split('\n')
-        summary = lines[1] if len(lines) > 1 else ""
-        return f"Financial Health Check:\n\n{summary}\n\n💡 Key areas: maintain 20%+ savings rate, diversify investments, and keep debt-to-income below 30%."
-
-    # Default
-    summary = context.split('\n')[1] if '\n' in context else "No data available"
-    return f"Here's a summary of your finances:\n\n{summary}\n\nI can help you with:\n• Spending analysis\n• Savings planning\n• Investment tracking\n• Goal planning\n• Subscription management\n\nWhat would you like to explore?"
 
 
 @router.post("/send", response_model=ChatResponse)
@@ -135,42 +35,179 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a message to the AI financial assistant."""
+    """Send a message to the AI financial assistant (non-streaming)."""
     session_id = data.session_id or str(uuid.uuid4())
 
-    # Build financial context
-    context = await _build_financial_context(current_user, db)
+    # Initialize AI components
+    rag_engine = RAGEngine(current_user, db)
+    memory = ConversationMemory(current_user, db, session_id)
 
-    # Get chat history
-    hist_r = await db.execute(
-        select(ChatMessage).where(
-            and_(ChatMessage.user_id == current_user.id, ChatMessage.session_id == session_id)
-        ).order_by(desc(ChatMessage.created_at)).limit(10)
+    # 1. Retrieve context using RAG pipeline
+    retrieval = await rag_engine.retrieve_context(data.message)
+
+    # 2. Get conversation history
+    chat_history = await memory.get_sliding_window(window_size=10)
+
+    # 3. Generate AI response
+    response_text = await generate_response(
+        system_prompt=retrieval["context_for_llm"],
+        user_message=data.message,
+        chat_history=chat_history,
     )
-    history = hist_r.scalars().all()
 
-    # Generate response
-    response = _generate_ai_response(data.message, context, history)
+    # 4. Save conversation
+    context_summary = f"Intent: {retrieval['intent']} ({retrieval['confidence']:.0%})"
+    await memory.save_exchange(data.message, response_text, context_summary)
 
-    # Save messages
-    user_msg = ChatMessage(user_id=current_user.id, role="user", content=data.message, session_id=session_id)
-    ai_msg = ChatMessage(user_id=current_user.id, role="assistant", content=response, context_used=context[:500], session_id=session_id)
-    db.add(user_msg)
-    db.add(ai_msg)
+    return ChatResponse(
+        response=response_text,
+        context_used=context_summary,
+        session_id=session_id,
+    )
 
-    return ChatResponse(response=response, context_used=context[:200], session_id=session_id)
+
+@router.post("/stream")
+async def stream_message(
+    data: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a message and receive streaming response via Server-Sent Events."""
+    session_id = data.session_id or str(uuid.uuid4())
+
+    # Initialize AI components
+    rag_engine = RAGEngine(current_user, db)
+    memory = ConversationMemory(current_user, db, session_id)
+
+    # 1. Retrieve context
+    retrieval = await rag_engine.retrieve_context(data.message)
+
+    # 2. Get conversation history
+    chat_history = await memory.get_sliding_window(window_size=10)
+
+    async def event_stream():
+        """Generate Server-Sent Events stream."""
+        full_response = []
+
+        # Send session_id first
+        yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+
+        # Send intent info
+        yield f"data: {json.dumps({'type': 'intent', 'intent': retrieval['intent'], 'confidence': retrieval['confidence']})}\n\n"
+
+        # Stream the response
+        try:
+            async for chunk in generate_response_stream(
+                system_prompt=retrieval["context_for_llm"],
+                user_message=data.message,
+                chat_history=chat_history,
+            ):
+                full_response.append(chunk)
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+
+            # Save conversation after streaming is complete
+            response_text = "".join(full_response)
+            context_summary = f"Intent: {retrieval['intent']} ({retrieval['confidence']:.0%})"
+            await memory.save_exchange(data.message, response_text, context_summary)
+
+            # Send completion signal
+            yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/history", response_model=List[ChatMessageResponse])
 async def get_chat_history(
     session_id: str = None,
+    limit: int = 50,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get chat history."""
+    """Get chat history for a session or all sessions."""
     query = select(ChatMessage).where(ChatMessage.user_id == current_user.id)
     if session_id:
         query = query.where(ChatMessage.session_id == session_id)
-    query = query.order_by(ChatMessage.created_at.desc()).limit(50)
+    query = query.order_by(ChatMessage.created_at.asc()).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.get("/sessions")
+async def get_sessions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all chat sessions for the current user."""
+    memory = ConversationMemory(current_user, db, "")
+    sessions = await memory.get_all_sessions()
+
+    # Add first message preview for each session
+    for session in sessions:
+        result = await db.execute(
+            select(ChatMessage.content).where(
+                and_(
+                    ChatMessage.user_id == current_user.id,
+                    ChatMessage.session_id == session["session_id"],
+                    ChatMessage.role == "user",
+                )
+            ).order_by(ChatMessage.created_at.asc()).limit(1)
+        )
+        first_msg = result.scalar()
+        session["preview"] = (first_msg[:80] + "...") if first_msg and len(first_msg) > 80 else first_msg
+
+    return sessions
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a chat session."""
+    result = await db.execute(
+        select(ChatMessage).where(
+            and_(
+                ChatMessage.user_id == current_user.id,
+                ChatMessage.session_id == session_id,
+            )
+        )
+    )
+    messages = result.scalars().all()
+    for msg in messages:
+        await db.delete(msg)
+
+    return {"status": "deleted", "session_id": session_id}
+
+
+@router.get("/status")
+async def get_ai_status():
+    """Get current AI engine status."""
+    provider = get_provider()
+    return {
+        "provider": provider,
+        "status": "active",
+        "capabilities": {
+            "streaming": True,
+            "context_aware": True,
+            "intent_detection": True,
+            "rag_retrieval": True,
+            "conversation_memory": True,
+        },
+        "model": {
+            "openai": "Connected to OpenAI" if provider == "openai" else "Not configured",
+            "gemini": "Connected to Gemini" if provider == "gemini" else "Not configured",
+            "fallback": "Active — intelligent rule-based engine" if provider == "fallback" else "Standby",
+        },
+    }
