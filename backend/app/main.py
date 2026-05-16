@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import init_db, async_session
-from app.api import auth, finance, analytics, chat
+from app.api import auth, finance, analytics, chat, ai_advanced, websocket
 from app.services.seed_data import seed_demo_data
 
 
@@ -45,6 +45,8 @@ app.include_router(auth.router)
 app.include_router(finance.router)
 app.include_router(analytics.router)
 app.include_router(chat.router)
+app.include_router(ai_advanced.router)
+app.include_router(websocket.router)
 
 
 @app.get("/")
