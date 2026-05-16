@@ -4,6 +4,8 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import AIChat from './pages/AIChat';
+import Predictions from './pages/Predictions';
+import AIReports from './pages/AIReports';
 
 // Placeholder components for other routes
 const Transactions = () => <div className="p-8"><h2 className="text-2xl font-bold">Transactions</h2><p className="text-gray-400 mt-4">Transaction management coming soon...</p></div>;
@@ -23,6 +25,8 @@ function App() {
             <Route path="investments" element={<Investments />} />
             <Route path="goals" element={<Goals />} />
             <Route path="chat" element={<AIChat />} />
+            <Route path="predictions" element={<Predictions />} />
+            <Route path="reports" element={<AIReports />} />
           </Route>
         </Routes>
       </Router>

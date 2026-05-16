@@ -1,5 +1,6 @@
 import { Outlet, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import VoiceAssistant from './VoiceAssistant';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
@@ -25,6 +26,7 @@ const Layout = () => {
           <Outlet />
         </div>
       </main>
+      <VoiceAssistant />
     </div>
   );
 };

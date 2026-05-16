@@ -4,6 +4,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.core.database import Base
+from app.models.financial import Transaction
 
 
 class User(Base):

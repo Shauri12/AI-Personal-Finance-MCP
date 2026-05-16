@@ -5,10 +5,11 @@ import {
   TrendingUp, 
   Target, 
   MessageSquare, 
-  Settings, 
   LogOut,
   ShieldCheck,
-  CreditCard
+  CreditCard,
+  Brain,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -21,6 +22,8 @@ const Sidebar = () => {
     { name: 'Investments', path: '/investments', icon: TrendingUp },
     { name: 'Goals', path: '/goals', icon: Target },
     { name: 'AI Chat', path: '/chat', icon: MessageSquare },
+    { name: 'Predictions', path: '/predictions', icon: Brain },
+    { name: 'AI Reports', path: '/reports', icon: FileText },
     { name: 'Subscriptions', path: '/subscriptions', icon: CreditCard },
   ];
 
