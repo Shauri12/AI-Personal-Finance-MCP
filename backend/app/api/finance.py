@@ -154,6 +154,22 @@ async def create_investment(
     return inv
 
 
+@router.delete("/investments/{inv_id}", status_code=204)
+async def delete_investment(
+    inv_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an investment."""
+    result = await db.execute(
+        select(Investment).where(and_(Investment.id == inv_id, Investment.user_id == current_user.id))
+    )
+    inv = result.scalar_one_or_none()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investment not found")
+    await db.delete(inv)
+
+
 # ── Goals ─────────────────────────────────────────────────
 
 @router.get("/goals", response_model=List[GoalResponse])

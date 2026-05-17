@@ -8,9 +8,9 @@ import Predictions from './pages/Predictions';
 import AIReports from './pages/AIReports';
 
 import Transactions from './pages/Transactions';
+import Investments from './pages/Investments';
 
 // Placeholder components for other routes
-const Investments = () => <div className="p-8"><h2 className="text-2xl font-bold">Investments</h2><p className="text-gray-400 mt-4">Investment tracking coming soon...</p></div>;
 const Goals = () => <div className="p-8"><h2 className="text-2xl font-bold">Goals</h2><p className="text-gray-400 mt-4">Financial goals coming soon...</p></div>;
 
 function App() {
