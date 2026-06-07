@@ -2,10 +2,13 @@
 Investment opportunities service using real public APIs for accurate live data.
 
 Sources:
-  1. yfinance (Python library) - Live stock quotes from Yahoo Finance
-  2. CoinGecko (free public API) - Live crypto prices
-  3. AMFI India (free public API) - Live mutual fund NAVs
-  4. Fixed Deposits (indicative rates, updated manually)
+  1. yfinance (Python library) - Live US stock quotes from Yahoo Finance
+  2. yfinance (Python library) - Live Indian NSE/BSE stock quotes
+  3. CoinGecko (free public API) - Live crypto prices
+  4. AMFI India (free public API) - Live mutual fund NAVs
+  5. metals.live (free public API) - Live Gold & Silver prices
+  6. Fixed Deposits (indicative rates, updated manually)
+  7. PPF / Government schemes (indicative rates)
 """
 
 import httpx
@@ -16,20 +19,26 @@ from datetime import datetime, timedelta
 # In-memory cache with 15-minute TTL (shorter = more accurate)
 _CACHE: Dict = {"data": [], "expires_at": datetime.min}
 
-# ─── Yahoo Finance via yfinance library ──────────────────────────────────────
-# yfinance handles cookie/crumb auth automatically, bypassing bot-protection
+# ─── US Stocks — Yahoo Finance via yfinance ──────────────────────────────────
 
-YAHOO_SYMBOLS = ["NVDA", "AAPL", "TSLA", "MSFT", "AMZN"]
+US_SYMBOLS = ["NVDA", "AAPL", "TSLA", "MSFT", "AMZN"]
+
+US_NAME_MAP = {
+    "NVDA": "NVIDIA Corp",
+    "AAPL": "Apple Inc",
+    "TSLA": "Tesla",
+    "MSFT": "Microsoft",
+    "AMZN": "Amazon",
+}
 
 
-def _fetch_yfinance_sync() -> List[Dict[str, Any]]:
-    """Synchronous yfinance fetch - run in thread pool to avoid blocking the async loop."""
+def _fetch_yfinance_batch_sync(symbols: List[str], name_map: Dict[str, str], asset_type: str, currency_symbol: str) -> List[Dict[str, Any]]:
+    """Synchronous yfinance fetch — run in thread pool to avoid blocking the async loop."""
     import yfinance as yf
     results = []
     try:
-        # Download 2 days of history for price + daily change in one batch call
         data = yf.download(
-            tickers=" ".join(YAHOO_SYMBOLS),
+            tickers=" ".join(symbols),
             period="2d",
             interval="1d",
             group_by="ticker",
@@ -37,17 +46,9 @@ def _fetch_yfinance_sync() -> List[Dict[str, Any]]:
             progress=False,
         )
 
-        name_map = {
-            "NVDA": "NVIDIA Corp",
-            "AAPL": "Apple Inc",
-            "TSLA": "Tesla",
-            "MSFT": "Microsoft",
-            "AMZN": "Amazon",
-        }
-
-        for symbol in YAHOO_SYMBOLS:
+        for symbol in symbols:
             try:
-                if len(YAHOO_SYMBOLS) == 1:
+                if len(symbols) == 1:
                     closes = data["Close"]
                 else:
                     closes = data[symbol]["Close"]
@@ -60,12 +61,16 @@ def _fetch_yfinance_sync() -> List[Dict[str, Any]]:
                 prev    = float(closes.iloc[-2]) if len(closes) >= 2 else price
                 chg_pct = round(((price - prev) / prev) * 100, 2) if prev else 0.0
 
+                # Strip exchange suffix for display (e.g. "RELIANCE.NS" → "RELIANCE")
+                display_symbol = symbol.split(".")[0]
+                link_symbol    = symbol  # keep full symbol for Yahoo Finance URL
+
                 results.append({
-                    "name":           f"{name_map.get(symbol, symbol)} ({symbol})",
-                    "type":           "stocks",
-                    "price":          f"${price:,.2f}",
+                    "name":           f"{name_map.get(symbol, display_symbol)} ({display_symbol})",
+                    "type":           asset_type,
+                    "price":          f"{currency_symbol}{price:,.2f}",
                     "change_pct":     chg_pct,
-                    "link":           f"https://finance.yahoo.com/quote/{symbol}",
+                    "link":           f"https://finance.yahoo.com/quote/{link_symbol}",
                     "source_website": "Yahoo Finance",
                 })
             except Exception as sym_err:
@@ -78,17 +83,18 @@ def _fetch_yfinance_sync() -> List[Dict[str, Any]]:
 
 
 async def fetch_yahoo_stocks() -> List[Dict[str, Any]]:
-    """Fetch live stock prices via yfinance (runs sync code in thread pool)."""
+    """Fetch live US stock prices via yfinance."""
     try:
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, _fetch_yfinance_sync)
+        results = await loop.run_in_executor(
+            None, _fetch_yfinance_batch_sync, US_SYMBOLS, US_NAME_MAP, "stocks", "$"
+        )
         if results:
             return results
     except Exception as e:
-        print(f"[Yahoo Finance] yfinance error: {e}")
+        print(f"[Yahoo Finance US] yfinance error: {e}")
 
-    # Final fallback
-    print("[Yahoo Finance] All methods failed.")
+    print("[Yahoo Finance US] All methods failed.")
     return [
         {"name": "NVIDIA Corp (NVDA)", "type": "stocks", "price": "Unavailable", "change_pct": 0.0, "link": "https://finance.yahoo.com/quote/NVDA", "source_website": "Yahoo Finance"},
         {"name": "Apple Inc (AAPL)",   "type": "stocks", "price": "Unavailable", "change_pct": 0.0, "link": "https://finance.yahoo.com/quote/AAPL", "source_website": "Yahoo Finance"},
@@ -98,8 +104,47 @@ async def fetch_yahoo_stocks() -> List[Dict[str, Any]]:
     ]
 
 
+# ─── Indian NSE Stocks — yfinance with .NS suffix ────────────────────────────
+
+NSE_SYMBOLS = [
+    "RELIANCE.NS", "TCS.NS", "INFY.NS",
+    "HDFCBANK.NS", "ICICIBANK.NS", "WIPRO.NS",
+]
+
+NSE_NAME_MAP = {
+    "RELIANCE.NS":  "Reliance Industries",
+    "TCS.NS":       "Tata Consultancy Services",
+    "INFY.NS":      "Infosys",
+    "HDFCBANK.NS":  "HDFC Bank",
+    "ICICIBANK.NS": "ICICI Bank",
+    "WIPRO.NS":     "Wipro",
+}
+
+
+async def fetch_indian_stocks() -> List[Dict[str, Any]]:
+    """Fetch live Indian NSE stock prices via yfinance (.NS symbols)."""
+    try:
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            None, _fetch_yfinance_batch_sync, NSE_SYMBOLS, NSE_NAME_MAP, "stocks", "₹"
+        )
+        # Tag as NSE for clarity
+        for r in results:
+            r["source_website"] = "NSE India"
+        if results:
+            return results
+    except Exception as e:
+        print(f"[NSE Stocks] yfinance error: {e}")
+
+    print("[NSE Stocks] All methods failed.")
+    return [
+        {"name": "Reliance Industries (RELIANCE)", "type": "stocks", "price": "Unavailable", "change_pct": 0.0, "link": "https://finance.yahoo.com/quote/RELIANCE.NS", "source_website": "NSE India"},
+        {"name": "TCS (TCS)",                      "type": "stocks", "price": "Unavailable", "change_pct": 0.0, "link": "https://finance.yahoo.com/quote/TCS.NS",      "source_website": "NSE India"},
+        {"name": "Infosys (INFY)",                  "type": "stocks", "price": "Unavailable", "change_pct": 0.0, "link": "https://finance.yahoo.com/quote/INFY.NS",     "source_website": "NSE India"},
+    ]
+
+
 # ─── CoinGecko Free API ──────────────────────────────────────────────────────
-# Public endpoint, no auth needed
 
 CRYPTO_IDS = ["bitcoin", "ethereum", "solana", "binancecoin", "ripple"]
 
@@ -120,11 +165,11 @@ async def fetch_coingecko_crypto() -> List[Dict[str, Any]]:
             if resp.status_code == 200:
                 coins = resp.json()
                 for c in coins:
-                    name      = c.get("name", "")
-                    symbol    = c.get("symbol", "").upper()
-                    price     = c.get("current_price", 0)
-                    chg       = c.get("price_change_percentage_24h", 0) or 0
-                    coin_id   = c.get("id", "")
+                    name    = c.get("name", "")
+                    symbol  = c.get("symbol", "").upper()
+                    price   = c.get("current_price", 0)
+                    chg     = c.get("price_change_percentage_24h", 0) or 0
+                    coin_id = c.get("id", "")
                     results.append({
                         "name":           f"{name} ({symbol})",
                         "type":           "crypto",
@@ -146,7 +191,6 @@ async def fetch_coingecko_crypto() -> List[Dict[str, Any]]:
 
 
 # ─── AMFI India (Free Public API) ───────────────────────────────────────────
-# AMFI publishes a plain-text NAV file updated daily
 
 AMFI_FUND_NAMES = {
     "Quant Small Cap Fund - Direct Plan - Growth": {
@@ -171,18 +215,16 @@ async def fetch_amfi_mutual_funds() -> List[Dict[str, Any]]:
     """Fetch live NAVs from AMFI India's public data endpoint."""
     results = []
     try:
-        # AMFI API: returns JSON with latest NAV for a given scheme code
         async with httpx.AsyncClient(timeout=10.0) as client:
             for fund_name, meta in AMFI_FUND_NAMES.items():
                 code = meta["scheme_code"]
                 url  = f"https://api.mfapi.in/mf/{code}/latest"
                 resp = await client.get(url)
                 if resp.status_code == 200:
-                    data   = resp.json()
+                    data     = resp.json()
                     nav_data = data.get("data", [{}])
-                    nav    = float(nav_data[0].get("nav", 0)) if nav_data else 0
+                    nav      = float(nav_data[0].get("nav", 0)) if nav_data else 0
 
-                    # Compute daily change from last 2 days if available
                     all_nav = data.get("data", [])
                     change_pct = 0.0
                     if len(all_nav) >= 2:
@@ -204,14 +246,75 @@ async def fetch_amfi_mutual_funds() -> List[Dict[str, Any]]:
 
     if not results:
         results = [
-            {"name": "Quant Small Cap Fund",      "type": "mutual_fund", "price": "See Groww", "change_pct": 0.0, "link": "https://groww.in/mutual-funds", "source_website": "AMFI India"},
-            {"name": "Parag Parikh Flexi Cap Fund","type": "mutual_fund", "price": "See Groww", "change_pct": 0.0, "link": "https://groww.in/mutual-funds", "source_website": "AMFI India"},
+            {"name": "Quant Small Cap Fund",       "type": "mutual_fund", "price": "See Groww", "change_pct": 0.0, "link": "https://groww.in/mutual-funds", "source_website": "AMFI India"},
+            {"name": "Parag Parikh Flexi Cap Fund", "type": "mutual_fund", "price": "See Groww", "change_pct": 0.0, "link": "https://groww.in/mutual-funds", "source_website": "AMFI India"},
+        ]
+    return results
+
+
+# ─── Gold & Silver — metals.live free API ────────────────────────────────────
+
+async def fetch_gold_silver() -> List[Dict[str, Any]]:
+    """Fetch live Gold and Silver prices from metals.live free public API."""
+    results = []
+    try:
+        url = "https://metals.live/api/v1/spot"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                # metals.live returns a list: [{"metal": "gold", "price": 3300.0, ...}]
+                for item in data:
+                    metal = item.get("metal", "").lower()
+                    price = item.get("price", 0)
+                    if metal == "gold":
+                        # Convert USD/troy oz to INR/10g approx (1 troy oz = 31.1g; multiply by USD/INR ~84)
+                        inr_10g = round(price * 84 / 31.1035 * 10, 2)
+                        results.append({
+                            "name":           "Gold (24K)",
+                            "type":           "gold",
+                            "price":          f"${price:,.2f}/oz | ₹{inr_10g:,.0f}/10g",
+                            "change_pct":     round(item.get("change_pct", item.get("changePercent", 0)), 2),
+                            "link":           "https://www.mcxindia.com/market-data/spot-market-price",
+                            "source_website": "metals.live",
+                        })
+                    elif metal == "silver":
+                        inr_1kg = round(price * 84 / 31.1035 * 1000, 0)
+                        results.append({
+                            "name":           "Silver",
+                            "type":           "gold",
+                            "price":          f"${price:,.2f}/oz | ₹{inr_1kg:,.0f}/kg",
+                            "change_pct":     round(item.get("change_pct", item.get("changePercent", 0)), 2),
+                            "link":           "https://www.mcxindia.com/market-data/spot-market-price",
+                            "source_website": "metals.live",
+                        })
+    except Exception as e:
+        print(f"[metals.live] Error: {e}")
+
+    if not results:
+        print("[metals.live] Using indicative fallback for gold/silver")
+        results = [
+            {
+                "name": "Gold (24K)",
+                "type": "gold",
+                "price": "See MCX",
+                "change_pct": 0.0,
+                "link": "https://www.mcxindia.com/market-data/spot-market-price",
+                "source_website": "metals.live",
+            },
+            {
+                "name": "Silver",
+                "type": "gold",
+                "price": "See MCX",
+                "change_pct": 0.0,
+                "link": "https://www.mcxindia.com/market-data/spot-market-price",
+                "source_website": "metals.live",
+            },
         ]
     return results
 
 
 # ─── Fixed Deposits (Indicative Rates) ──────────────────────────────────────
-# FD rates are announced by banks and rarely change (updated here manually)
 
 async def fetch_fixed_deposits() -> List[Dict[str, Any]]:
     """Return indicative FD rates from major Indian banks."""
@@ -251,6 +354,54 @@ async def fetch_fixed_deposits() -> List[Dict[str, Any]]:
     ]
 
 
+# ─── PPF & Government Schemes ────────────────────────────────────────────────
+
+async def fetch_government_schemes() -> List[Dict[str, Any]]:
+    """Return indicative rates for popular Indian government-backed investment schemes."""
+    return [
+        {
+            "name":           "Public Provident Fund (PPF)",
+            "type":           "ppf",
+            "price":          "Min: ₹500 / Max: ₹1.5L p.a.",
+            "change_pct":     7.10,
+            "link":           "https://www.indiapost.gov.in/Financial/Pages/Content/PPF.aspx",
+            "source_website": "India Post",
+        },
+        {
+            "name":           "National Savings Certificate (NSC)",
+            "type":           "bonds",
+            "price":          "Min: ₹1,000 | 5 Year Lock-in",
+            "change_pct":     7.70,
+            "link":           "https://www.indiapost.gov.in/Financial/Pages/Content/NSC.aspx",
+            "source_website": "India Post",
+        },
+        {
+            "name":           "Sukanya Samriddhi Yojana (SSY)",
+            "type":           "ppf",
+            "price":          "Min: ₹250 / Max: ₹1.5L p.a.",
+            "change_pct":     8.20,
+            "link":           "https://www.indiapost.gov.in/Financial/Pages/Content/Sukanya-Samridhi-Accounts.aspx",
+            "source_website": "India Post",
+        },
+        {
+            "name":           "National Pension System (NPS) — Tier I",
+            "type":           "nps",
+            "price":          "Min: ₹500",
+            "change_pct":     9.00,   # indicative historical CAGR
+            "link":           "https://www.npstrust.org.in/",
+            "source_website": "NPS Trust",
+        },
+        {
+            "name":           "Sovereign Gold Bond (SGB) 2.5% + Gold Returns",
+            "type":           "gold",
+            "price":          "Issued at Gold price",
+            "change_pct":     2.50,   # guaranteed annual interest rate
+            "link":           "https://rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+            "source_website": "RBI",
+        },
+    ]
+
+
 # ─── Aggregator ─────────────────────────────────────────────────────────────
 
 async def get_all_opportunities() -> List[Dict[str, Any]]:
@@ -264,9 +415,12 @@ async def get_all_opportunities() -> List[Dict[str, Any]]:
     # Fetch all sources concurrently
     all_results = await asyncio.gather(
         fetch_yahoo_stocks(),
+        fetch_indian_stocks(),
         fetch_coingecko_crypto(),
         fetch_amfi_mutual_funds(),
+        fetch_gold_silver(),
         fetch_fixed_deposits(),
+        fetch_government_schemes(),
         return_exceptions=True,
     )
 

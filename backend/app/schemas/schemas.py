@@ -1,7 +1,7 @@
 """Pydantic schemas for request/response validation."""
 
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -117,6 +117,84 @@ class InvestmentResponse(BaseModel):
     start_date: datetime
     maturity_date: Optional[datetime]
     is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InvestmentUpdate(BaseModel):
+    name: Optional[str] = None
+    current_value: Optional[float] = None
+    invested_amount: Optional[float] = None
+    returns_pct: Optional[float] = None
+    risk_score: Optional[float] = None
+    units: Optional[float] = None
+    nav: Optional[float] = None
+    platform: Optional[str] = None
+    maturity_date: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
+class AssetAllocation(BaseModel):
+    investment_type: str
+    total_invested: float
+    total_current_value: float
+    count: int
+    percentage: float
+    pnl: float
+    pnl_pct: float
+
+
+class InvestmentPerformer(BaseModel):
+    id: int
+    name: str
+    investment_type: str
+    returns_pct: float
+    invested_amount: float
+    current_value: float
+    pnl: float
+
+
+class PortfolioSummary(BaseModel):
+    total_invested: float
+    total_current_value: float
+    total_pnl: float
+    total_pnl_pct: float
+    cagr: Optional[float]           # annualised return estimate
+    risk_label: str                 # Conservative / Balanced / Aggressive
+    avg_risk_score: float
+    asset_allocation: List[AssetAllocation]
+    best_performer: Optional[InvestmentPerformer]
+    worst_performer: Optional[InvestmentPerformer]
+    total_investments: int
+
+
+class InvestmentAlert(BaseModel):
+    alert_type: str          # maturity | rebalance | drop
+    severity: str            # info | warning | critical
+    investment_id: Optional[int]
+    investment_name: Optional[str]
+    message: str
+    action: Optional[str]    # suggested action text
+
+
+class SIPInstallmentCreate(BaseModel):
+    amount: float
+    date: Optional[datetime] = None
+    units_purchased: Optional[float] = None
+    nav_at_purchase: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class SIPInstallmentResponse(BaseModel):
+    id: int
+    investment_id: int
+    amount: float
+    date: datetime
+    units_purchased: Optional[float]
+    nav_at_purchase: Optional[float]
+    notes: Optional[str]
     created_at: datetime
 
     class Config:

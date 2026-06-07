@@ -130,3 +130,21 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="chat_messages")
+
+
+class SIPInstallment(Base):
+    """Tracks individual SIP/MF installment payments for an investment."""
+    __tablename__ = "sip_installments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    investment_id = Column(Integer, ForeignKey("investments.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Float, nullable=False)
+    date = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    units_purchased = Column(Float, nullable=True)
+    nav_at_purchase = Column(Float, nullable=True)
+    notes = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User")
+    investment = relationship("Investment", backref="sip_installments")
