@@ -113,6 +113,7 @@ async def delete_transaction(
     await db.delete(txn)
 
 
+
 # ── Investments ───────────────────────────────────────────
 
 @router.get("/investments", response_model=List[InvestmentResponse])
@@ -125,6 +126,16 @@ async def get_investments(
         select(Investment).where(Investment.user_id == current_user.id).order_by(desc(Investment.current_value))
     )
     return result.scalars().all()
+
+
+@router.get("/opportunities")
+async def get_investment_opportunities(
+    current_user: User = Depends(get_current_user),
+):
+    """Scrape and return live investment opportunities from multiple sources."""
+    from app.services.scraper import get_all_opportunities
+    opportunities = await get_all_opportunities()
+    return {"opportunities": opportunities, "count": len(opportunities)}
 
 
 @router.post("/investments", response_model=InvestmentResponse, status_code=201)
