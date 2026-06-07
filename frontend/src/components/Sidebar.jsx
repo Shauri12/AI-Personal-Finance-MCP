@@ -6,7 +6,6 @@ import {
   Target, 
   MessageSquare, 
   LogOut,
-  ShieldCheck,
   CreditCard,
   Brain,
   FileText
@@ -23,61 +22,63 @@ const Sidebar = () => {
     { name: 'Goals', path: '/goals', icon: Target },
     { name: 'AI Chat', path: '/chat', icon: MessageSquare },
     { name: 'Predictions', path: '/predictions', icon: Brain },
-    { name: 'AI Reports', path: '/reports', icon: FileText },
+    { name: 'Reports', path: '/reports', icon: FileText },
     { name: 'Subscriptions', path: '/subscriptions', icon: CreditCard },
   ];
 
   return (
-    <div className="w-64 min-h-screen border-r border-white/10 bg-darker/50 backdrop-blur-xl flex flex-col">
-      <div className="p-6">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-            <ShieldCheck className="text-white" size={24} />
+    <div className="w-60 min-h-screen border-r border-[#22252d] bg-[#0c0d11] flex flex-col">
+      <div className="p-5">
+        {/* Logo area */}
+        <div className="flex items-center gap-2.5 mb-7">
+          <div className="w-9 h-9 rounded-lg bg-[#4f8ff7] flex items-center justify-center">
+            <IndianRupee className="text-white" size={20} />
           </div>
           <div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent leading-tight">
-              FinanceOS
+            <h1 className="text-base font-semibold text-white leading-tight">
+              Ctrl + Alt + Profit
             </h1>
-            <span className="text-[10px] uppercase tracking-widest text-primary font-bold">MCP Powered</span>
+            <span className="text-[10px] text-gray-500">personal finance</span>
           </div>
         </div>
 
-        <nav className="space-y-2">
+        <nav className="space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.name}
               to={item.path}
               className={({ isActive }) => `
-                flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+                flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors
                 ${isActive 
-                  ? 'bg-primary/10 text-primary border border-primary/20' 
-                  : 'text-gray-400 hover:bg-white/5 hover:text-white'}
+                  ? 'bg-[#4f8ff7]/10 text-[#4f8ff7] font-medium' 
+                  : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}
               `}
             >
-              <item.icon size={20} className="group-hover:scale-110 transition-transform" />
-              <span className="font-medium">{item.name}</span>
+              <item.icon size={18} />
+              <span>{item.name}</span>
             </NavLink>
           ))}
         </nav>
       </div>
 
-      <div className="mt-auto p-6 space-y-4">
-        <div className="glass-card p-4 flex items-center gap-3 border-white/5">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold">
+      <div className="mt-auto p-5 space-y-3">
+        {/* user card */}
+        <div className="bg-[#16181e] p-3 rounded-lg flex items-center gap-2.5 border border-[#22252d]">
+          <div className="w-8 h-8 rounded-full bg-[#4f8ff7] flex items-center justify-center text-white text-sm font-semibold">
             {user?.full_name?.charAt(0) || 'U'}
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-semibold truncate text-white">{user?.full_name || 'Guest'}</p>
-            <p className="text-[10px] text-gray-400 truncate">{user?.email}</p>
+            <p className="text-sm font-medium truncate text-white">{user?.full_name || 'Guest'}</p>
+            <p className="text-[11px] text-gray-500 truncate">{user?.email}</p>
           </div>
         </div>
 
         <button 
           onClick={logout}
-          className="flex items-center gap-3 w-full px-4 py-3 text-gray-400 hover:text-red-400 hover:bg-red-400/5 rounded-xl transition-colors"
+          className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-gray-400 hover:text-red-400 hover:bg-red-400/5 rounded-lg transition-colors"
         >
-          <LogOut size={20} />
-          <span className="font-medium">Logout</span>
+          <LogOut size={18} />
+          <span>Logout</span>
         </button>
       </div>
     </div>

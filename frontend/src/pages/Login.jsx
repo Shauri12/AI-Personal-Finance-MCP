@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Mail, Lock, ArrowRight } from 'lucide-react';
+import { IndianRupee, Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
@@ -27,58 +27,55 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-darker flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background blobs */}
-      <div className="absolute top-0 -left-20 w-96 h-96 bg-primary/20 rounded-full blur-[120px]"></div>
-      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-secondary/20 rounded-full blur-[120px]"></div>
-
-      <div className="w-full max-w-md animate-in relative z-10">
+    <div className="min-h-screen bg-[#0c0d11] flex items-center justify-center p-6">
+      <div className="w-full max-w-sm animate-in">
+        {/* branding */}
         <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-2xl shadow-primary/40">
-              <ShieldCheck className="text-white" size={28} />
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-[#4f8ff7] flex items-center justify-center">
+              <IndianRupee className="text-white" size={22} />
             </div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent">
-              FinanceOS
+            <h1 className="text-2xl font-bold text-white">
+              Ctrl + Alt + Profit
             </h1>
           </div>
         </div>
 
-        <div className="glass-card p-8 border-white/10 shadow-2xl">
-          <h2 className="text-2xl font-bold mb-2">Welcome Back</h2>
-          <p className="text-gray-400 text-sm mb-8">Log in to your AI-powered financial assistant.</p>
+        <div className="bg-[#16181e] p-7 rounded-xl border border-[#22252d]">
+          <h2 className="text-xl font-semibold mb-1 text-white">Welcome back</h2>
+          <p className="text-gray-500 text-sm mb-6">Sign in to continue</p>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl">
+            <div className="mb-5 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300 ml-1">Email Address</label>
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors" size={18} />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="text-sm text-gray-400">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                  className="w-full bg-[#111318] border border-[#2a2d37] rounded-lg py-2.5 pl-10 pr-3 text-sm focus:border-[#4f8ff7] outline-none transition-colors"
                   placeholder="name@example.com"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300 ml-1">Password</label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors" size={18} />
+            <div className="space-y-1.5">
+              <label className="text-sm text-gray-400">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                  className="w-full bg-[#111318] border border-[#2a2d37] rounded-lg py-2.5 pl-10 pr-3 text-sm focus:border-[#4f8ff7] outline-none transition-colors"
                   placeholder="••••••••"
                   required
                 />
@@ -88,23 +85,23 @@ const Login = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+              className="w-full bg-[#4f8ff7] hover:bg-[#3a7ce6] text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
-              {!isLoading && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
+              {!isLoading && <ArrowRight size={16} />}
             </button>
           </form>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm">
-              Don't have an account? <span className="text-primary cursor-pointer hover:underline">Register now</span>
+              Don't have an account? <span className="text-[#4f8ff7] cursor-pointer hover:underline">Register</span>
             </p>
           </div>
         </div>
 
-        <div className="mt-8 text-center text-gray-600 text-xs uppercase tracking-widest font-bold">
-          Privacy-First Architecture • SECURE JWT AUTH
-        </div>
+        <p className="mt-6 text-center text-gray-600 text-xs">
+          Built as a college project · Secure authentication
+        </p>
       </div>
     </div>
   );

@@ -8,8 +8,8 @@ const Layout = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-darker flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-[#0c0d11] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#4f8ff7]/30 border-t-[#4f8ff7] rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -19,9 +19,9 @@ const Layout = () => {
   }
 
   return (
-    <div className="flex bg-darker text-white min-h-screen">
+    <div className="flex bg-[#111318] text-white min-h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto max-h-screen p-8 bg-gradient-to-br from-darker to-dark">
+      <main className="flex-1 overflow-y-auto max-h-screen p-6">
         <div className="max-w-7xl mx-auto animate-in">
           <Outlet />
         </div>
