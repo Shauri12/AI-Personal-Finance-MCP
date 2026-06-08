@@ -11,7 +11,7 @@ import Transactions from './pages/Transactions';
 import Investments from './pages/Investments';
 
 // Placeholder components for other routes
-const Goals = () => <div className="p-8"><h2 className="text-2xl font-bold">Goals</h2><p className="text-gray-400 mt-4">Financial goals coming soon...</p></div>;
+import Goals from './pages/Goals';
 
 function App() {
   return (

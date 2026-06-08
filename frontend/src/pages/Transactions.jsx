@@ -38,7 +38,8 @@ const TransactionModal = ({ isOpen, onClose, onSuccess }) => {
       setFormData({ amount: '', transaction_type: 'expense', category: 'food', description: '', payment_method: 'upi' });
     } catch (error) {
       console.error('Error creating transaction:', error);
-      alert('Failed to create transaction');
+      const errorMsg = error.response?.data?.detail || error.message;
+      alert(`Failed to create transaction: ${JSON.stringify(errorMsg)}`);
     } finally {
       setLoading(false);
     }
